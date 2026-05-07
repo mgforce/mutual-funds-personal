@@ -40,4 +40,6 @@ All artefacts (PDFs, parsed data, SQLite cache) stay in `data/` and `debug/` —
 
 ## License
 
-[AGPL-3.0](LICENSE). You may read, run, modify, and self-host this code. If you redistribute it or run a modified version as a network service, your version must also be released under AGPL-3.0.
+Copyright © 2026 Kesha Shah. **All rights reserved.** See [LICENSE](LICENSE).
+
+This source is publicly visible for inspection and personal use only. You may clone this repository and run the application for your own personal, non-commercial use. You may **not** copy, modify, redistribute, fork, or use any portion of this code in another project or product without prior written permission. This code may not be used to train AI/ML models.
