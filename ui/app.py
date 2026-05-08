@@ -510,7 +510,7 @@ def render_scheme_detail(r: SchemeRow, _all_rows_for_detail: list[SchemeRow]) ->
         st.caption(f"{r.amc} · {r.sub_type} · ISIN {r.isin or '—'}")
     with header_cols[1]:
         if st.button("Close", use_container_width=True, key=f"close_detail_{r.isin or r.scheme}"):
-            st.session_state["_selected_scheme_id"] = None
+            st.query_params.clear()
             st.rerun()
 
     cols = st.columns(4)
@@ -689,15 +689,12 @@ def render_account_picker() -> None:
 
 
 def main() -> None:
-    # Handle URL-driven actions before anything else: ?scheme=XYZ selects a
-    # card, ?sort=value toggles the sort. After applying we clear the param
-    # so the URL stays clean and refresh doesn't replay the action.
+    # ?scheme=ISIN is *persistent* — it identifies the detail page, so we
+    # mirror it into session_state but leave the URL untouched (refresh,
+    # share, browser-back all work). ?sort=KEY is *transient* — apply the
+    # toggle, then strip it (preserving ?scheme=) so a refresh doesn't
+    # re-flip the sort direction.
     qp = st.query_params
-    if "scheme" in qp:
-        raw = qp.get("scheme") or ""
-        st.session_state["_selected_scheme_id"] = raw or None
-        st.query_params.clear()
-        st.rerun()
     if "sort" in qp:
         new_key = qp.get("sort") or "value"
         cur_key = st.session_state.get("_sort_key", "value")
@@ -707,8 +704,12 @@ def main() -> None:
         else:
             st.session_state["_sort_key"] = new_key
             st.session_state["_sort_asc"] = _SORT_DEFAULT_ASC.get(new_key, False)
+        scheme = qp.get("scheme")
         st.query_params.clear()
+        if scheme:
+            st.query_params["scheme"] = scheme
         st.rerun()
+    st.session_state["_selected_scheme_id"] = qp.get("scheme") or None
 
     st.title("Mutual Fund Portfolio")
 
@@ -887,6 +888,24 @@ def main() -> None:
                 "Then click **📥 Process inbox** to load it.")
         return
 
+    # Detail-only view: when a scheme is selected, hide the list/filters/chart
+    # and render only that scheme. Back button restores the portfolio view —
+    # filter state lives in session_state so it survives the round trip.
+    selected_id = st.session_state.get("_selected_scheme_id")
+    if selected_id:
+        selected_row = next(
+            (r for r in rows if (r.isin or r.scheme) == selected_id),
+            None,
+        )
+        if selected_row is None:
+            st.query_params.clear()
+        else:
+            if st.button("← Back to portfolio", key="back_to_list"):
+                st.query_params.clear()
+                st.rerun()
+            render_scheme_detail(selected_row, rows)
+            return
+
     FILTER_LABELS = {
         "ALL": "All",
         "EQUITY": "Equity",
@@ -1008,15 +1027,11 @@ def main() -> None:
         sort_asc = st.session_state.get("_sort_asc", False)
         visible = sorted(visible, key=_SORT_KEYS[sort_key], reverse=not sort_asc)
 
-        selected_id = st.session_state.get("_selected_scheme_id")
         portfolio_total = sum(r.current_value for r in visible) or 1.0
 
         for r in visible:
-            is_sel = (selected_id == (r.isin or r.scheme))
             allocation = r.current_value / portfolio_total * 100
-            render_scheme_card(r, is_selected=is_sel, allocation_pct=allocation)
-            if is_sel:
-                render_scheme_detail(r, rows)
+            render_scheme_card(r, is_selected=False, allocation_pct=allocation)
 
     st.divider()
 
