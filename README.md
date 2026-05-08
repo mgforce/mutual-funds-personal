@@ -20,6 +20,7 @@ git clone https://github.com/<you>/mutual-funds-personal.git
 cd mutual-funds-personal
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+playwright install chromium       # ~150 MB; needed for the CAS request flow
 cp config.example.yaml config.yaml
 # edit config.yaml — fill in your email, app password, and a PDF password of your choice
 streamlit run ui/app.py
