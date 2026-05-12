@@ -4,16 +4,20 @@ A local, private mutual-fund portfolio tracker for Indian investors. Pulls your 
 
 ## What you get
 
-- Auto-fetch the latest encrypted CAS PDF from your Gmail
-- Holdings, current value, and unrealised gains using live NAV
-- Realised gain breakdown (short-term / long-term)
-- Allocation donuts by AMC, category, and fund
-- Per-folio holder names, scheme detail panels
-- Multi-account support (e.g. you + spouse)
+- Auto-fetch the latest CAS PDF from your Gmail (encrypted at rest on disk)
+- Holdings, current value, and unrealised gains using live AMFI NAV
+- **XIRR** per scheme and combined portfolio XIRR
+- Allocation donut by asset class / sub-category
+- **Equity LTCG FY tracker** — realised gain this FY + room left under the ₹1.25L exemption
+- Per-scheme redemption calculator (LTCG / STCG split, lot-by-lot FIFO breakdown)
+- Per-folio holder names, scheme detail pages with persistent URLs
+- **Multi-user**: admin invites others by token; each user owns one CAS account
+- **View multiple accounts in one place** — switch between your own and any linked accounts (e.g. spouse, parents) from a sidebar dropdown; unlink anytime
+- Everything encrypted under each user's login password — disk theft alone gets you nothing
 
 ## Setup
 
-Requires Python 3.10+, a Gmail account, and a Gmail [App Password](https://myaccount.google.com/apppasswords).
+Requires Python 3.9+, a Gmail account, and a Gmail [App Password](https://myaccount.google.com/apppasswords).
 
 ```bash
 git clone https://github.com/<you>/mutual-funds-personal.git
@@ -27,36 +31,51 @@ cp config.example.yaml config.yaml
 
 ## Running
 
-Two processes — the FastAPI **auth gateway** in front of the Streamlit **dashboard**:
+You need **both** processes running side-by-side — the auth gateway can't render the dashboard without the Streamlit backend, and Streamlit can't authenticate users without the gateway.
 
 ```bash
-# terminal 1: dashboard (only reachable through the gateway)
+# terminal 1: Streamlit dashboard backend (port 8501)
 streamlit run ui/app.py
 
-# terminal 2: auth gateway (bind 0.0.0.0 if you want LAN access)
+# terminal 2: FastAPI auth gateway (port 8000 — this is what you'll visit)
 uvicorn auth_server.main:app --host 0.0.0.0 --port 8000
 ```
 
-Port + XSRF/CORS settings are baked into `.streamlit/config.toml` so the run command stays simple.
+Then open **http://localhost:8000** (use `0.0.0.0` so phones/laptops on the same Wi-Fi can reach it too). On first launch you'll be guided through:
 
-Open **http://localhost:8000** in your browser. On first launch you'll be guided through admin signup → Gmail App Password + PDF password setup → first CAS fetch.
+1. **Admin signup** — the email you set as `admin_email` in `config.yaml` becomes the only account that can invite others.
+2. **Setup** — Gmail App Password + a CAS PDF password.
+3. **First CAS fetch** — the form is submitted to CAMS automatically and the dashboard polls Gmail until the statement lands.
 
-> Note: you never visit `:8501` directly. The dashboard reads its session from a header that the gateway injects on every proxied request; direct access shows an error.
+To invite a second user (e.g. spouse), open **⚙️ Settings → 👥 Invite a user** in the sidebar — share the one-time link out of band.
+
+> You never visit `:8501` directly. The dashboard reads its session from a signed header the gateway injects on every proxied request; direct access shows an error. Streamlit's port / XSRF / CORS settings are baked into `.streamlit/config.toml` so the command stays simple.
 
 ## How it works
 
 | Layer | What it does |
 |---|---|
-| `auth_server/`           | FastAPI auth gateway: login, signup, setup, migration. HTTP-only signed cookies. Reverse-proxies authenticated requests to Streamlit |
-| `ui/app.py`              | Streamlit dashboard — no auth UI, reads user identity from the gateway's signed header |
+| `auth_server/`           | FastAPI auth gateway: login, signup, invite, setup, change-password, delete-account, migration. HTTP-only signed cookies. Reverse-proxies authenticated requests to Streamlit |
+| `ui/`                    | Streamlit dashboard split into focused modules: `app.py` (orchestrator), `sidebar.py`, `scheme_card.py`, `scheme_detail.py`, `cas_workflow.py`, `donut.py`, `format.py`, `query.py`, `auth_glue.py` |
 | `ingest/cams_request.py` | Fills the CAMS Mailback form via Playwright |
-| `ingest/gmail_fetch.py`  | Watches Gmail for the encrypted CAS reply |
-| `analytics/`             | Parses the PDF, computes positions, NAV, gains, tax buckets |
+| `ingest/gmail_fetch.py`  | Pulls the CAS PDF reply from Gmail over IMAP and writes it encrypted to disk |
+| `analytics/auth.py`      | Argon2id login, KEK derivation, invite + linking, account CRUD |
+| `analytics/crypto.py`    | Argon2id KDF, Fernet wrap/unwrap for data keys + CAS PDFs + parse cache |
+| `analytics/db.py`        | SQLite store: users, cas_accounts, account_access, invites |
+| `analytics/portfolio.py` | Parses the CAS PDF, computes positions, XIRR, AMFI NAV overlay |
+| `analytics/tax.py`       | FIFO lot tracking, LTCG / STCG bucketing, FY exemption math |
 
-All artefacts (PDFs, parsed data, SQLite cache) stay in `data/` and `debug/` — both gitignored.
+All artefacts (encrypted PDFs, parsed data, SQLite store, server secret) live under `data/` — gitignored, never synced. Debug captures under `debug/` are also gitignored.
 
 ## License
 
-Copyright © 2026 Kesha Shah. **All rights reserved.** See [LICENSE](LICENSE).
+Copyright © 2026 Kesha Shah. Licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).
 
-This source is publicly visible for inspection and personal use only. You may clone this repository and run the application for your own personal, non-commercial use. You may **not** copy, modify, redistribute, fork, or use any portion of this code in another project or product without prior written permission. This code may not be used to train AI/ML models.
+**TL;DR:**
+
+- ✅ Run it for yourself, your family, your hobby project
+- ✅ Fork it, modify it, send pull requests, redistribute changes
+- ✅ Use it for education, research, or in a non-profit / charity / government context
+- ❌ Use it in any product, service, or workflow tied to revenue — commercial use of any kind requires a separate license
+
+The full canonical text is in [LICENSE](LICENSE); see [polyformproject.org/licenses/noncommercial/1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/) for the project's plain-English explanation.
