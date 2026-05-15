@@ -101,6 +101,9 @@ def _refresh_cas_button(ctx: AccountContext, slug: str, reset_caches: Callable[[
             last_fetched_pdf=str(arrived_path),
             last_fetched_at=datetime.now().isoformat(),
         )
+        with st.spinner("Parsing the new statement (one-time, ~90s)…"):
+            from analytics.portfolio import parse_cas
+            parse_cas(ctx)
         reset_caches()
         st.success(f"✅ Got new CAS: {arrived_path.name}")
         st.rerun()
@@ -133,6 +136,9 @@ def _process_inbox_button(
                 last_fetched_pdf=str(new_path),
                 last_fetched_at=datetime.now().isoformat(),
             )
+            with st.spinner("Parsing the new statement (one-time, ~90s)…"):
+                from analytics.portfolio import parse_cas
+                parse_cas(ctx)
             reset_caches()
             st.success(f"✅ Got new CAS: {new_path.name}")
             st.rerun()
