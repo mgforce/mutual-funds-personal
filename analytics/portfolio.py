@@ -84,6 +84,11 @@ class SchemeRow:
     def gain_pct(self) -> float:
         return (self.gain / self.invested) if self.invested else 0.0
 
+    @property
+    def plan_type(self) -> str:
+        # Pre-2013 schemes have neither keyword; they're all Regular.
+        return "Direct" if "direct" in self.scheme.lower() else "Regular"
+
 
 def latest_pdf_enc(ctx: AccountContext) -> Path:
     """Latest encrypted CAS file on disk for this account."""

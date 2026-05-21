@@ -147,6 +147,15 @@ def _render_filters(rows: list[SchemeRow]) -> tuple[list[SchemeRow], list[Scheme
     if selected_amcs:
         type_filtered = [r for r in type_filtered if r.amc in selected_amcs]
 
+    plan_choice = st.segmented_control(
+        "Plan",
+        options=["All", "Direct", "Regular"],
+        default="All",
+        key=f"plan_filter_{type_filter}",
+    ) or "All"
+    if plan_choice != "All":
+        type_filtered = [r for r in type_filtered if r.plan_type == plan_choice]
+
     # Sub-category: only meaningful inside a specific asset class.
     available_subs = sorted({
         TYPE_DISPLAY.get(r.type, r.type) if type_filter == "ALL" else r.sub_type

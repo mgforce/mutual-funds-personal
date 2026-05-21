@@ -12,20 +12,13 @@ from ui.format import TYPE_DISPLAY, fmt_inr
 def breakdown_data(rows: list[SchemeRow], type_filter: str) -> tuple[pd.DataFrame, str]:
     """Return (chart-ready df, title). When ``type_filter == "ALL"`` the chart
     is grouped by asset class; otherwise by sub-category within that class."""
-    if type_filter == "ALL":
-        df = (
-            pd.DataFrame([
-                {"Bucket": TYPE_DISPLAY.get(r.type, r.type), "Current": r.current_value}
-                for r in rows if r.current_value > 0
-            ])
-            .groupby("Bucket", as_index=False)["Current"].sum()
-        )
-        return df, "Asset class"
-    df = (
-        pd.DataFrame([{"Bucket": r.sub_type, "Current": r.current_value} for r in rows if r.current_value > 0])
-        .groupby("Bucket", as_index=False)["Current"].sum()
-    )
-    return df, f"{TYPE_DISPLAY.get(type_filter, type_filter)} sub-categories"
+    bucket = (lambda r: TYPE_DISPLAY.get(r.type, r.type)) if type_filter == "ALL" else (lambda r: r.sub_type)
+    df = pd.DataFrame(
+        [{"Bucket": bucket(r), "Current": r.current_value} for r in rows if r.current_value > 0],
+        columns=["Bucket", "Current"],
+    ).groupby("Bucket", as_index=False)["Current"].sum()
+    title = "Asset class" if type_filter == "ALL" else f"{TYPE_DISPLAY.get(type_filter, type_filter)} sub-categories"
+    return df, title
 
 
 def render_donut(df: pd.DataFrame, title: str) -> None:
