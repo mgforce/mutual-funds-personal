@@ -39,6 +39,7 @@ from ui.scheme_card import (  # noqa: E402
 )
 from ui.scheme_detail import fy_realized_equity_ltcg, render_scheme_detail  # noqa: E402
 from ui.sidebar import render_account_picker  # noqa: E402
+from ui.systematic_view import render_systematic  # noqa: E402
 
 st.set_page_config(page_title="Mutual Fund Portfolio", layout="wide")
 
@@ -355,18 +356,24 @@ def main() -> None:
             render_scheme_detail(selected_row, rows)
             return
 
-    type_filtered, visible, _type_filter = _render_filters(rows)
-    _render_summary_metrics(visible)
-    st.divider()
-    _render_capital_gains(rows)
-    st.divider()
-    _render_scheme_list(visible)
-    st.divider()
+    tab_portfolio, tab_systematic = st.tabs(["📊 Portfolio", "🔁 SIPs & STPs"])
 
-    # Chart always shows the full type-level breakdown.
-    df_chart, title = breakdown_data(type_filtered, _type_filter)
-    st.subheader(title)
-    render_donut(df_chart, title)
+    with tab_portfolio:
+        type_filtered, visible, _type_filter = _render_filters(rows)
+        _render_summary_metrics(visible)
+        st.divider()
+        _render_capital_gains(rows)
+        st.divider()
+        _render_scheme_list(visible)
+        st.divider()
+
+        # Chart always shows the full type-level breakdown.
+        df_chart, title = breakdown_data(type_filtered, _type_filter)
+        st.subheader(title)
+        render_donut(df_chart, title)
+
+    with tab_systematic:
+        render_systematic(rows)
 
 
 if __name__ == "__main__":
