@@ -17,7 +17,6 @@ that account's data is lost. The user explicitly accepted this tradeoff.
 from __future__ import annotations
 
 import base64
-import os
 import secrets
 
 from argon2 import PasswordHasher

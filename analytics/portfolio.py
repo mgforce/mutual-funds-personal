@@ -264,7 +264,6 @@ def to_scheme_rows(
             ))
 
         invested = sum(f.invested for f in folio_entries)
-        cas_value = sum(f.current_value for f in folio_entries)
         units = sum(f.units for f in folio_entries)
         nav = next((f.nav for f in folio_entries if f.nav), 0.0)
         nav_date = max((f.nav_date for f in folio_entries), default=date.today())

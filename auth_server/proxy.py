@@ -15,7 +15,6 @@ import os
 
 import httpx
 from fastapi import Request, Response, WebSocket
-from starlette.responses import StreamingResponse
 
 STREAMLIT_URL = os.environ.get("STREAMLIT_URL", "http://127.0.0.1:8501")
 SESSION_HEADER = "X-Session-Payload"

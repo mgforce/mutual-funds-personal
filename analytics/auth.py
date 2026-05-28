@@ -591,8 +591,8 @@ def needs_setup(session: Session) -> str | None:
         (session.user_email,),
     )
     for row in rows:
-        for field in ("enc_app_password", "enc_pdf_password"):
-            blob = row[field]
+        for col in ("enc_app_password", "enc_pdf_password"):
+            blob = row[col]
             if not blob:
                 return row["slug"]
             try:

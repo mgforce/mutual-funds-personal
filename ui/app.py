@@ -21,7 +21,6 @@ sys.path.insert(0, str(ROOT))
 
 import streamlit as st  # noqa: E402
 
-from analytics import auth  # noqa: E402
 from analytics.accounts import AccountContext, account_context  # noqa: E402
 from analytics.demo import is_demo_slug  # noqa: E402
 from analytics.nav import get_latest_nav  # noqa: E402

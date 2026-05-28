@@ -235,20 +235,3 @@ def render_cas_workflow(
             NAV_CACHE.unlink()
         reset_caches()
         st.rerun()
-
-    st.divider()
-    # TODO: remove once classification/categorization rules are stable.
-    st.caption("Force re-parse the current CAS (dev — after editing classification rules).")
-    if st.button("🧹 Re-parse current PDF (dev)", use_container_width=True):
-        if demo:
-            # Deleting the cache would force casparser to attempt the
-            # placeholder PDF, which would crash the demo. No-op instead.
-            st.toast("Demo data is bundled — re-parse is a no-op.", icon="🧪")
-            reset_caches()
-            st.rerun()
-        else:
-            p = ctx.parse_cache_path
-            if p.exists():
-                p.unlink()
-            reset_caches()
-            st.rerun()
