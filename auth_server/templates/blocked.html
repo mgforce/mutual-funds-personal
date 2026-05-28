@@ -1,0 +1,12 @@
+{% extends "_base.html" %}
+{% block title %}Access blocked · Mutual Fund Portfolio{% endblock %}
+{% block content %}
+  <h1>🚫 Access blocked</h1>
+  <p class="muted">
+    This IP address has been blocked after too many failed login attempts.
+  </p>
+  <p class="muted" style="margin-top:1.5em;font-size:0.9em;">
+    If this is a mistake, contact the site admin and mention your IP:
+    <code>{{ ip }}</code>.
+  </p>
+{% endblock %}

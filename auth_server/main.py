@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, Form, Request, WebSocket
+from fastapi import FastAPI, Form, HTTPException, Request, WebSocket
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -61,6 +61,17 @@ def _login_ctx(**extra) -> dict:
 def _redirect(url: str) -> RedirectResponse:
     # 303 forces a GET regardless of the method that triggered the redirect.
     return RedirectResponse(url=url, status_code=303)
+
+
+def _client_ip(request: Request) -> str:
+    """Real visitor IP. Cloudflare Tunnel forwards it on CF-Connecting-IP;
+    for direct origin access (local testing) fall back to the socket peer."""
+    return (
+        (request.headers.get("cf-connecting-ip") or "").strip()
+        or (request.headers.get("x-forwarded-for", "").split(",")[0]).strip()
+        or (request.client.host if request.client else "")
+        or "unknown"
+    )
 
 
 @app.on_event("startup")
@@ -121,6 +132,9 @@ def _next_screen(request: Request) -> str | None:
 
 @app.get("/login", response_class=HTMLResponse)
 def login_get(request: Request):
+    ip = _client_ip(request)
+    if auth.is_ip_blocked(ip):
+        return _render("blocked.html", request, ip=ip)
     redirect = _next_screen(request)
     if redirect and redirect != "/login":
         return _redirect(redirect)
@@ -131,9 +145,24 @@ def login_get(request: Request):
 
 @app.post("/login")
 def login_post(request: Request, email: str = Form(...), password: str = Form(...)):
+    ip = _client_ip(request)
+    if auth.is_ip_blocked(ip):
+        return _render("blocked.html", request, ip=ip)
     try:
         token, _ = auth.login(email, password)
     except ValueError as e:
+        # Demo login is published — strangers typoing it shouldn't count
+        # toward a permanent block. Real account misses do.
+        normalized = (email or "").strip().lower()
+        if normalized != DEMO_EMAIL:
+            count = auth.record_failed_login(ip, normalized)
+            if count >= auth.FAILED_LOGIN_THRESHOLD:
+                auth.block_ip(
+                    ip,
+                    reason=f"exceeded {auth.FAILED_LOGIN_THRESHOLD} failed "
+                           f"login attempts in {int(auth.FAILED_LOGIN_WINDOW.total_seconds()//3600)}h",
+                )
+                return _render("blocked.html", request, ip=ip)
         return _render("login.html", request, **_login_ctx(error=str(e), email=email))
     response = _redirect("/")
     sessions.attach(response, token)
@@ -155,8 +184,11 @@ def logout(request: Request):
 
 @app.get("/bootstrap", response_class=HTMLResponse)
 def bootstrap_get(request: Request):
+    # Once admin is set up the bootstrap surface should not be enumerable
+    # by random scanners. 404 (not redirect) so probes can't tell whether
+    # this app is in the pre- or post-setup state.
     if auth.any_admin_exists():
-        return _redirect("/login")
+        raise HTTPException(status_code=404)
     if migrate.needs_migration():
         return _redirect("/migrate")
     return _render("bootstrap.html", request, admin_email=auth.admin_email() or "")
@@ -168,6 +200,8 @@ def bootstrap_post(
     password: str = Form(...),
     confirm: str = Form(...),
 ):
+    if auth.any_admin_exists():
+        raise HTTPException(status_code=404)
     if password != confirm:
         return _render("bootstrap.html", request,
                        error="Passwords don't match.",
@@ -263,8 +297,10 @@ def setup_post(
 
 @app.get("/migrate", response_class=HTMLResponse)
 def migrate_get(request: Request):
+    # Symmetric with /bootstrap: hide once it's a no-op so the post-setup
+    # state isn't enumerable.
     if not migrate.needs_migration():
-        return _redirect("/login")
+        raise HTTPException(status_code=404)
     return _render("migrate.html", request, admin_email=auth.admin_email() or "")
 
 
@@ -275,7 +311,7 @@ def migrate_post(
     confirm: str = Form(...),
 ):
     if not migrate.needs_migration():
-        return _redirect("/login")
+        raise HTTPException(status_code=404)
     if password != confirm:
         return _render("migrate.html", request, error="Passwords don't match.",
                        admin_email=auth.admin_email() or "")

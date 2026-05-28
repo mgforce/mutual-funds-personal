@@ -57,6 +57,24 @@ CREATE TABLE IF NOT EXISTS invites (
 
 CREATE INDEX IF NOT EXISTS idx_access_slug ON account_access(account_slug);
 CREATE INDEX IF NOT EXISTS idx_invites_email ON invites(invitee_email);
+
+-- Login throttling. Failed POSTs to /login record one row here per attempt;
+-- once 5 fail-rows accumulate inside a 24-hour rolling window for a given
+-- IP, that IP gets a permanent entry in ip_blocklist. Removal is manual via
+-- scripts/unblock_ip.py — no auto-expiry, intentional for the public demo.
+CREATE TABLE IF NOT EXISTS failed_login_attempts (
+    ip            TEXT NOT NULL,
+    email         TEXT,
+    attempted_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_failed_login_ip_time
+    ON failed_login_attempts(ip, attempted_at);
+
+CREATE TABLE IF NOT EXISTS ip_blocklist (
+    ip          TEXT PRIMARY KEY,
+    blocked_at  TEXT NOT NULL,
+    reason      TEXT
+);
 """
 
 

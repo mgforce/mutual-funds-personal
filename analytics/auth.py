@@ -36,6 +36,13 @@ ACCOUNTS_DIR = ROOT / "data" / "accounts"
 INVITE_TTL = timedelta(days=7)
 SESSION_TTL = timedelta(days=7)
 
+# Login throttling — IP-only, never per-email (per-email locks would let any
+# stranger DoS the admin's own account). The window is rolling; once the
+# threshold is hit inside that window, the IP lands in ip_blocklist
+# permanently and only ``scripts/unblock_ip.py`` removes it.
+FAILED_LOGIN_WINDOW = timedelta(hours=24)
+FAILED_LOGIN_THRESHOLD = 5
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -493,6 +500,71 @@ def delete_my_account(session: Session, password: str) -> None:
             _SESSIONS.pop(tok, None)
 
 
+# ---------------------------------------------------------------------------
+# Login throttling — IP-only, manual unblock. See FAILED_LOGIN_* constants.
+# ---------------------------------------------------------------------------
+
+def _purge_old_failures(conn) -> None:
+    """Drop fail-rows older than the rolling window so ``count_recent_failures``
+    reflects 'in the last 24h' even though we never garbage-collect."""
+    cutoff = (_utcnow() - FAILED_LOGIN_WINDOW).isoformat()
+    conn.execute("DELETE FROM failed_login_attempts WHERE attempted_at < ?", (cutoff,))
+
+
+def record_failed_login(ip: str, email: str) -> int:
+    """Insert a failed-login row for this IP. Returns the resulting count of
+    failures for the IP inside the rolling window so the caller can decide
+    whether the threshold has been crossed and a permanent block should fire."""
+    if not ip:
+        return 0
+    with db.connect() as c:
+        _purge_old_failures(c)
+        c.execute(
+            "INSERT INTO failed_login_attempts (ip, email, attempted_at) VALUES (?, ?, ?)",
+            (ip, email or "", _now()),
+        )
+        row = c.execute(
+            "SELECT COUNT(*) AS n FROM failed_login_attempts WHERE ip = ?",
+            (ip,),
+        ).fetchone()
+    return int(row["n"])
+
+
+def is_ip_blocked(ip: str) -> bool:
+    if not ip:
+        return False
+    return db.fetchone("SELECT 1 FROM ip_blocklist WHERE ip = ?", (ip,)) is not None
+
+
+def block_ip(ip: str, reason: str = "") -> None:
+    """Permanent block. ``INSERT OR IGNORE`` keeps re-calls idempotent."""
+    if not ip:
+        return
+    db.execute(
+        "INSERT OR IGNORE INTO ip_blocklist (ip, blocked_at, reason) VALUES (?, ?, ?)",
+        (ip, _now(), reason or ""),
+    )
+
+
+def unblock_ip(ip: str) -> int:
+    """Remove an IP from the blocklist AND clear its failed-login history so
+    it starts fresh. Returns 1 if a blocklist row was deleted, 0 otherwise."""
+    if not ip:
+        return 0
+    with db.connect() as c:
+        cur = c.execute("DELETE FROM ip_blocklist WHERE ip = ?", (ip,))
+        removed = cur.rowcount or 0
+        c.execute("DELETE FROM failed_login_attempts WHERE ip = ?", (ip,))
+    return removed
+
+
+def list_blocked_ips() -> list[dict]:
+    rows = db.fetchall(
+        "SELECT ip, blocked_at, reason FROM ip_blocklist ORDER BY blocked_at DESC"
+    )
+    return [dict(r) for r in rows]
+
+
 def validate_cams_pdf_password(pw: str) -> str | None:
     """CAMS form constraints. Returns an error string, or None if valid."""
     if not pw:
@@ -533,11 +605,14 @@ def needs_setup(session: Session) -> str | None:
 
 
 __all__ = [
+    "FAILED_LOGIN_THRESHOLD",
+    "FAILED_LOGIN_WINDOW",
     "Session",
     "accept_invite",
     "accounts_for_session",
     "admin_email",
     "any_admin_exists",
+    "block_ip",
     "change_password",
     "create_invite",
     "delete_my_account",
@@ -547,11 +622,15 @@ __all__ = [
     "get_invite",
     "get_session",
     "get_user",
+    "is_ip_blocked",
     "link_existing_account",
+    "list_blocked_ips",
     "login",
     "needs_setup",
+    "record_failed_login",
     "register_admin",
     "slugify",
+    "unblock_ip",
     "unlink_account",
     "update_account_creds",
     "user_exists",
