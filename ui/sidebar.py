@@ -20,6 +20,7 @@ import streamlit as st
 import httpx
 
 from analytics import auth
+from analytics.demo import DEMO_EMAIL
 from ui.auth_glue import active_slug
 
 
@@ -173,10 +174,13 @@ def _render_settings_expander(session: auth.Session, slug: str, *, is_owner: boo
         st.caption(f"Logged in as **{session.user_email}**"
                    + (" (admin)" if session.is_admin else ""))
 
-        st.markdown(
-            "<a href='/account/password' target='_self'>🔒 Change login password</a>",
-            unsafe_allow_html=True,
-        )
+        if session.user_email == DEMO_EMAIL:
+            st.caption("🔒 _Password change is disabled for the demo account._")
+        else:
+            st.markdown(
+                "<a href='/account/password' target='_self'>🔒 Change login password</a>",
+                unsafe_allow_html=True,
+            )
         st.divider()
 
         if is_owner:

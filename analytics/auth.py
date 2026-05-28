@@ -233,6 +233,9 @@ def change_password(session: Session, current_password: str, new_password: str) 
     key the user has access to. Atomic: either everything updates or nothing
     does. The in-memory Session is mutated to carry the new KEK so the
     user's existing cookie keeps working — no forced logout."""
+    from analytics.demo import DEMO_EMAIL
+    if session.user_email == DEMO_EMAIL:
+        raise ValueError("The demo account password is fixed and cannot be changed.")
     user = get_user(session.user_email)
     if not user:
         raise ValueError("User not found.")
