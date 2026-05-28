@@ -147,18 +147,19 @@ def login_post(request: Request, email: str = Form(...), password: str = Form(..
     try:
         token, _ = auth.login(email, password)
     except ValueError as e:
-        # Demo login is published — strangers typoing it shouldn't count
-        # toward a permanent block. Real account misses do.
+        # Any failed POST counts — including the demo email. The demo
+        # credentials are displayed on the login form, so legitimate
+        # visitors should not be racking up failures; 5 wrong attempts
+        # from one IP is overwhelmingly a bot.
         normalized = (email or "").strip().lower()
-        if normalized != DEMO_EMAIL:
-            count = auth.record_failed_login(ip, normalized)
-            if count >= auth.FAILED_LOGIN_THRESHOLD:
-                auth.block_ip(
-                    ip,
-                    reason=f"exceeded {auth.FAILED_LOGIN_THRESHOLD} failed "
-                           f"login attempts in {int(auth.FAILED_LOGIN_WINDOW.total_seconds()//3600)}h",
-                )
-                return _render("blocked.html", request, ip=ip)
+        count = auth.record_failed_login(ip, normalized)
+        if count >= auth.FAILED_LOGIN_THRESHOLD:
+            auth.block_ip(
+                ip,
+                reason=f"exceeded {auth.FAILED_LOGIN_THRESHOLD} failed "
+                       f"login attempts in {int(auth.FAILED_LOGIN_WINDOW.total_seconds()//3600)}h",
+            )
+            return _render("blocked.html", request, ip=ip)
         return _render("login.html", request, **_login_ctx(error=str(e), email=email))
     response = _redirect("/")
     sessions.attach(response, token)
