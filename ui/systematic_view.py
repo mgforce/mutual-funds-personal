@@ -8,7 +8,8 @@ import streamlit as st
 
 from analytics.portfolio import SchemeRow
 from analytics.systematic import (
-    ACTIVE_WINDOW_DAYS, IN_LEG_TYPES, OUT_LEG_TYPES, detect_sips, detect_stps,
+    ACTIVE_WINDOW_DAYS, IN_LEG_TYPES, OUT_LEG_TYPES, _is_transfer_leg,
+    detect_sips, detect_stps,
 )
 from ui.format import fmt_inr
 
@@ -103,6 +104,7 @@ def _render_debug_panel(rows: list[SchemeRow]) -> None:
                     "Date": tdate,
                     "Leg": "OUT" if ttype in OUT_LEG_TYPES else "IN",
                     "Type": ttype,
+                    "Transfer?": "✓" if _is_transfer_leg(t.get("description") or "") else "",
                     "Scheme": r.scheme,
                     "Folio": f.folio,
                     "Amount": abs(float(t.get("amount") or 0)),
@@ -111,10 +113,12 @@ def _render_debug_panel(rows: list[SchemeRow]) -> None:
     with st.expander(f"🔍 Debug: STP candidate legs in the last 90 days ({len(leg_rows)})"):
         st.caption(
             "Every REDEMPTION/SWITCH_OUT (out-leg) and PURCHASE/PURCHASE_SIP/"
-            "SWITCH_IN (in-leg) we see in the CAS. Pairing requires same date "
-            "and amount within ₹1 between an OUT leg and an IN leg whose ISINs "
-            "differ. If an STP you expect isn't appearing, look for the two "
-            "matching rows here and check what's different."
+            "SWITCH_IN (in-leg) we see in the CAS. Only legs marked Transfer? ✓ "
+            "(description says STP / Systematic Transfer / Switch) are paired — "
+            "a plain buy or sell is ignored. Pairing then requires the dates "
+            "within 3 days (legs often settle T+1/T+2), amount within ₹1, and "
+            "differing ISINs. If an STP you expect isn't appearing, look for "
+            "its two rows here and check the Transfer? mark and what differs."
         )
         if not leg_rows:
             st.info("No candidate legs in the last 90 days.")

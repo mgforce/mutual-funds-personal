@@ -30,6 +30,10 @@ DAYS_PER_MONTH = 30.4375
 RECENT_INSTALLMENTS_FOR_CADENCE = 12
 OUT_LEG_TYPES = {"SWITCH_OUT", "REDEMPTION"}
 IN_LEG_TYPES = {"SWITCH_IN", "PURCHASE_SIP", "PURCHASE"}
+# The out-leg (redemption) and matching in-leg (purchase) of an STP often
+# settle a day or two apart — e.g. Canara Robeco redeems on T and buys the
+# target on T+1 — so pair on a small date window, not exact equality.
+STP_DATE_PAIRING_TOLERANCE_DAYS = 3
 
 
 @dataclass
@@ -183,6 +187,21 @@ def detect_sips(
     return out
 
 
+def _is_transfer_leg(description: str) -> bool:
+    """True when a CAS description marks a transaction as an STP/switch leg
+    rather than a standalone buy or sell. STP legs read like "STP In (From …)",
+    "STP Out (To …)", "Systematic Transfer In/Out", or "Switch In/Out"; plain
+    purchases, redemptions, and SIPs ("Systematic Investment") do not. Spaces
+    are stripped first so casparser's spaced-out "S T P" still matches, and
+    "systematictransfer" is matched whole so it can't catch a plain SIP's
+    "Systematic Investment". Pairing only transfer-marked legs is what stops
+    coincidental redeem+buy events between unrelated funds — including across
+    fund houses, where an STP is operationally impossible — from being
+    mistaken for a transfer."""
+    d = "".join((description or "").lower().split())
+    return "stp" in d or "systematictransfer" in d or "switch" in d
+
+
 def _build_leg(folio: str, holder: str, scheme: str, isin: str, amc: str, t: dict) -> dict:
     return {
         "folio": folio,
@@ -197,17 +216,22 @@ def _build_leg(folio: str, holder: str, scheme: str, isin: str, amc: str, t: dic
 
 
 def _pair_stp_legs(rows: Iterable[SchemeRow]) -> dict[tuple[str, str], list[dict]]:
-    """Pair STP legs by (date, |amount|) only — neither folio nor AMC are
-    required to match. Out-legs come from SWITCH_OUT and REDEMPTION; in-legs
+    """Pair STP legs by (date-within-tolerance, |amount|) only — neither folio
+    nor AMC are required to match, and the out/in legs need only fall within
+    STP_DATE_PAIRING_TOLERANCE_DAYS of each other (they routinely settle a day
+    or two apart). Out-legs come from SWITCH_OUT and REDEMPTION; in-legs
     from SWITCH_IN, PURCHASE_SIP, and PURCHASE — broad on type because
     casparser labels transactions by the description text, not intent, and
     different AMCs phrase STP legs differently ("STP IN", "Systematic
     Transfer In", "Switch In", etc.). Some AMCs (Canara, Quant) issue a
     separate folio per scheme; others print the AMC name slightly differently
     on each scheme's CAS page — both break folio- or AMC-strict matching.
-    The recurrence requirement (≥2 same-amount pairs between the same source
-    and target ISINs, applied later) is what rules out coincidental
-    redeem+buy events. Returns a (source_isin, target_isin) → pair list."""
+    Both legs must be transfer-marked in their description (see
+    _is_transfer_leg) — that, not folio/AMC matching, is what keeps a plain
+    sell + plain buy of a similar amount (even across fund houses) from being
+    mistaken for an STP. The recurrence requirement (≥2 same-amount pairs
+    between the same source and target ISINs, applied later) is a further
+    guard. Returns a (source_isin, target_isin) → pair list."""
     outs: list[dict] = []
     ins: list[dict] = []
     for r in rows:
@@ -216,6 +240,8 @@ def _pair_stp_legs(rows: Iterable[SchemeRow]) -> dict[tuple[str, str], list[dict
                 ttype = t.get("type")
                 if not t.get("amount") or not t.get("date") or not r.isin:
                     continue
+                if not _is_transfer_leg(t.get("description") or ""):
+                    continue  # a plain buy/sell, not an STP/switch leg
                 if ttype in OUT_LEG_TYPES:
                     outs.append(_build_leg(f.folio, f.holder_name, r.scheme, r.isin, r.amc, t))
                 elif ttype in IN_LEG_TYPES:
@@ -224,29 +250,37 @@ def _pair_stp_legs(rows: Iterable[SchemeRow]) -> dict[tuple[str, str], list[dict
     pairs: dict[tuple[str, str], list[dict]] = {}
     used_in_idx: set[int] = set()
     for o in outs:
+        best_idx: int | None = None
+        best_gap: int | None = None
         for idx, i in enumerate(ins):
             if idx in used_in_idx:
                 continue
-            if i["date"] != o["date"]:
+            gap = abs((i["date"] - o["date"]).days)
+            if gap > STP_DATE_PAIRING_TOLERANCE_DAYS:
                 continue
             if i["isin"] == o["isin"]:
                 continue  # would be the same scheme — not a transfer
             if abs(i["amount"] - o["amount"]) > 1.0:
                 continue
-            key = (o["isin"], i["isin"])
-            pairs.setdefault(key, []).append({
-                "date": o["date"],
-                "amount": o["amount"],
-                "source_scheme": o["scheme"],
-                "target_scheme": i["scheme"],
-                "source_folio": o["folio"],
-                "target_folio": i["folio"],
-                "amc": o["amc"],
-                "holder_name": o["holder_name"],
-                "in_tx_id": i["tx_id"],
-            })
-            used_in_idx.add(idx)
-            break
+            # Prefer the in-leg closest in time to this out-leg.
+            if best_gap is None or gap < best_gap:
+                best_idx, best_gap = idx, gap
+        if best_idx is None:
+            continue
+        i = ins[best_idx]
+        key = (o["isin"], i["isin"])
+        pairs.setdefault(key, []).append({
+            "date": o["date"],
+            "amount": o["amount"],
+            "source_scheme": o["scheme"],
+            "target_scheme": i["scheme"],
+            "source_folio": o["folio"],
+            "target_folio": i["folio"],
+            "amc": o["amc"],
+            "holder_name": o["holder_name"],
+            "in_tx_id": i["tx_id"],
+        })
+        used_in_idx.add(best_idx)
     return pairs
 
 
