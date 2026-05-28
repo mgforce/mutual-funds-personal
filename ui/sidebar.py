@@ -48,7 +48,7 @@ def render_account_picker(session: auth.Session, on_account_change: Callable[[],
         format_func=lambda s: label_for.get(s, s),
         key="acc_picker",
     )
-    _render_link_expander()
+    _render_link_expander(disabled=session.user_email == DEMO_EMAIL)
 
     if chosen != active:
         st.session_state["_active_slug"] = chosen
@@ -66,15 +66,30 @@ def render_account_picker(session: auth.Session, on_account_change: Callable[[],
     return chosen
 
 
-def _render_link_expander() -> None:
+def _render_link_expander(*, disabled: bool = False) -> None:
     """Inline form: enter another user's email + login password and submit
     without leaving the dashboard. Streamlit calls the gateway over loopback,
     forwarding the user's auth cookie so the gateway resolves the right
-    Session (and its KEK) for the link operation."""
+    Session (and its KEK) for the link operation.
+
+    ``disabled`` greys out the form (used for the demo account) without
+    removing the expander, so the sidebar layout matches a real account."""
     # Auto-open the expander while we're showing the success state so the
     # user sees the linked-email confirmation immediately on rerun.
     just_linked = st.session_state.get("_just_linked")
     with st.expander("➕ Link another account", expanded=bool(just_linked)):
+        if disabled:
+            with st.form("link_account_form_disabled", clear_on_submit=False):
+                st.text_input("Account email", value="", disabled=True,
+                              key="_link_email_disabled")
+                st.text_input("Account login password", type="password",
+                              value="", disabled=True,
+                              key="_link_pw_disabled")
+                st.form_submit_button(
+                    "Link account", type="primary", use_container_width=True,
+                    disabled=True, help="Disabled on the demo account.",
+                )
+            return
         if just_linked:
             st.success(f"Linked **{just_linked}**.")
             st.caption(

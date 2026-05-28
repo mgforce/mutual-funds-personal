@@ -330,6 +330,9 @@ def link_existing_account(session: Session, target_email: str, target_password: 
     Verifies target's password → derives target's KEK → unwraps the data key →
     re-wraps it with the requester's KEK and persists an account_access row.
     Target keeps their own access; this is additive."""
+    from analytics.demo import DEMO_EMAIL
+    if session.user_email == DEMO_EMAIL:
+        raise ValueError("Linking another account is disabled on the demo account.")
     target_email = _norm_email(target_email)
     if target_email == session.user_email:
         raise ValueError("You already have access to your own account.")
