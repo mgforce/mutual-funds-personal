@@ -449,6 +449,9 @@ def update_account_creds(
     "no change" — Streamlit password inputs sometimes round-trip empty even
     when a value was prefilled, and we don't want that to silently clobber
     a working password."""
+    from analytics.demo import is_demo_slug
+    if is_demo_slug(slug):
+        raise ValueError("Credentials on the demo account are read-only.")
     key = session.data_key(slug)
     fields: list[str] = []
     params: list = []

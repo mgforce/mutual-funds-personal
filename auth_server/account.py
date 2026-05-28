@@ -79,7 +79,10 @@ def set_app_password(request: Request, slug: str, app_password: str = Form(...))
         return _back_to_dashboard("err-no-access")
     if not app_password.strip():
         return _back_to_dashboard("err-empty-password")
-    auth.update_account_creds(sess, slug, app_password=app_password.strip())
+    try:
+        auth.update_account_creds(sess, slug, app_password=app_password.strip())
+    except ValueError as e:
+        return _back_to_dashboard(f"err-{e}")
     return _back_to_dashboard("app-pw-saved")
 
 
@@ -91,7 +94,10 @@ def set_pdf_password(request: Request, slug: str, pdf_password: str = Form(...))
     err = auth.validate_cams_pdf_password(pdf_password)
     if err:
         return _back_to_dashboard(f"err-{err}")
-    auth.update_account_creds(sess, slug, pdf_password=pdf_password.strip())
+    try:
+        auth.update_account_creds(sess, slug, pdf_password=pdf_password.strip())
+    except ValueError as e:
+        return _back_to_dashboard(f"err-{e}")
     return _back_to_dashboard("pdf-pw-saved")
 
 

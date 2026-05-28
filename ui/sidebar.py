@@ -20,7 +20,7 @@ import streamlit as st
 import httpx
 
 from analytics import auth
-from analytics.demo import DEMO_EMAIL
+from analytics.demo import DEMO_EMAIL, is_demo_slug
 from ui.auth_glue import active_slug
 
 
@@ -183,7 +183,12 @@ def _render_settings_expander(session: auth.Session, slug: str, *, is_owner: boo
             )
         st.divider()
 
-        if is_owner:
+        if is_demo_slug(slug):
+            st.caption(
+                "🧪 _Gmail and CAS PDF credentials on the demo account are "
+                "fixed and cannot be updated._"
+            )
+        elif is_owner:
             _render_inline_password_setter(
                 session, slug,
                 form_key="gmail_pw",
