@@ -2,6 +2,16 @@
 
 A local, private mutual-fund portfolio tracker for Indian investors. Pulls your CAS (Consolidated Account Statement) from CAMS by email, parses it, and serves a Streamlit dashboard with holdings, gains, allocation, and tax info — entirely on your machine, no data ever leaves.
 
+---
+
+> ### 🧪 Try the live demo
+>
+> **[finance.twounderthesky.com](https://finance.twounderthesky.com)** — login `demo@example.com` / `demo1234`
+>
+> All data shown is fictional. The demo serves a hand-crafted sample CAS for investor "Baburao Ganpatrao Aptekar" with 6 schemes across Equity / Debt / Multi-Asset / Foreign, two active SIPs across two PPFAS folios, an HDFC Liquid → HDFC Mid Cap STP, and a current-FY LTCG redemption — enough to exercise every dashboard surface (filters, allocation donut, scheme detail pages, redemption calculator, SIPs & STPs tab). The Refresh-CAS / Process-inbox buttons are simulated on the demo path; no real CAMS or Gmail traffic is generated.
+
+---
+
 ## What you get
 
 - Auto-fetch the latest CAS PDF from your Gmail (encrypted at rest on disk)
@@ -50,6 +60,16 @@ Then open **http://localhost:8000** (use `0.0.0.0` so phones/laptops on the same
 To invite a second user (e.g. spouse), open **⚙️ Settings → 👥 Invite a user** in the sidebar — share the one-time link out of band.
 
 > You never visit `:8501` directly. The dashboard reads its session from a signed header the gateway injects on every proxied request; direct access shows an error. Streamlit's port / XSRF / CORS settings are baked into `.streamlit/config.toml` so the command stays simple.
+
+### Seeding a local demo account
+
+If you're publicly hosting your instance and want a "kick the tyres" account visitors can use without seeing real data, run:
+
+```bash
+python scripts/seed_demo_account.py
+```
+
+This creates `demo@example.com` / `demo1234` (non-admin), writes a hand-crafted dummy CAS to `data/accounts/demo_example_com/`, and the dashboard automatically shows a "this is fictional" banner whenever the demo is the active account. The Refresh-CAS / Process-inbox buttons are stubbed on this path so visitors don't trigger real CAMS or Gmail traffic. Idempotent — re-run any time to refresh the sample data.
 
 ## How it works
 
