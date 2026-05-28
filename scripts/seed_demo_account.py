@@ -193,10 +193,10 @@ def _finalize_scheme(
     }
 
 
-INVESTOR_NAME = "Baburao Ganpatrao Aptekar (Demo)"
+INVESTOR_NAME = "Baburao Ganpatrao Apte (Demo)"
 # Same person, but CAMS sometimes stored the names in a different order across
 # folios — surface both so the per-folio "holder name" column has real variety.
-SECOND_HOLDER_NAME = "Aptekar Baburao Ganpatrao (Demo)"
+SECOND_HOLDER_NAME = "Apte Baburao Ganpatrao (Demo)"
 
 
 def build_dummy_cas(today: date) -> dict:

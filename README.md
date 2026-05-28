@@ -8,7 +8,7 @@ A local, private mutual-fund portfolio tracker for Indian investors. Pulls your 
 >
 > **[finance.twounderthesky.com](https://finance.twounderthesky.com)** — login `demo@example.com` / `demo1234`
 >
-> All data shown is fictional. The demo serves a hand-crafted sample CAS for investor "Baburao Ganpatrao Aptekar" with 6 schemes across Equity / Debt / Multi-Asset / Foreign, two active SIPs across two PPFAS folios, an HDFC Liquid → HDFC Mid Cap STP, and a current-FY LTCG redemption — enough to exercise every dashboard surface (filters, allocation donut, scheme detail pages, redemption calculator, SIPs & STPs tab). The Refresh-CAS / Process-inbox buttons are simulated on the demo path; no real CAMS or Gmail traffic is generated.
+> All data shown is fictional. The demo serves a hand-crafted sample CAS for investor "Baburao Ganpatrao Apte" with 6 schemes across Equity / Debt / Multi-Asset / Foreign, two active SIPs across two PPFAS folios, an HDFC Liquid → HDFC Mid Cap STP, and a current-FY LTCG redemption — enough to exercise every dashboard surface (filters, allocation donut, scheme detail pages, redemption calculator, SIPs & STPs tab). The Refresh-CAS / Process-inbox buttons are simulated on the demo path; no real CAMS or Gmail traffic is generated.
 
 ---
 
