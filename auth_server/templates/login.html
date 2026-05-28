@@ -16,4 +16,12 @@
     </label>
     <button type="submit">Sign in</button>
   </form>
+
+  {% if demo_email %}
+  <p class="muted" style="margin-top:1.5em;font-size:0.9em;line-height:1.5;">
+    Just exploring? Sign in to the demo account —
+    <code>{{ demo_email }}</code> / <code>{{ demo_password }}</code>.
+    All data shown is fictional.
+  </p>
+  {% endif %}
 {% endblock %}

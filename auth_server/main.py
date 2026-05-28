@@ -29,7 +29,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from analytics import auth, db, migrate, session_payload
+from analytics import auth, crypto, db, migrate, session_payload
+from analytics.demo import DEMO_EMAIL, DEMO_PASSWORD
 from auth_server import account, proxy, sessions
 
 ROOT = Path(__file__).resolve().parent
@@ -48,6 +49,15 @@ def _render(name: str, request: Request, **ctx) -> HTMLResponse:
     return TEMPLATES.TemplateResponse(request, name, ctx)
 
 
+def _login_ctx(**extra) -> dict:
+    """Add the demo-login hint when the demo account has actually been seeded —
+    avoids advertising credentials that wouldn't work on a fresh clone."""
+    if auth.user_exists(DEMO_EMAIL):
+        extra.setdefault("demo_email", DEMO_EMAIL)
+        extra.setdefault("demo_password", DEMO_PASSWORD)
+    return extra
+
+
 def _redirect(url: str) -> RedirectResponse:
     # 303 forces a GET regardless of the method that triggered the redirect.
     return RedirectResponse(url=url, status_code=303)
@@ -62,6 +72,27 @@ def _ensure_db() -> None:
 # Gating: which screen does the user belong on?
 # ---------------------------------------------------------------------------
 
+def _session_is_stale(sess: auth.Session) -> bool:
+    """An in-memory Session can outlive the DB rows it holds keys for — e.g.
+    an admin wipes & re-seeds the demo account out-of-band while a visitor's
+    tab still carries the pre-seed cookie. The session's data_keys then
+    decrypt nothing, and any later cred lookup raises InvalidToken (and 500).
+    Detect that by probing one decryption per owned account; the caller can
+    then bounce the user through /logout instead of into /setup."""
+    for slug, key in sess.data_keys.items():
+        acc = auth.get_cas_account(slug)
+        if acc is None:
+            return True  # account was deleted underneath us
+        blob = acc.get("enc_pdf_password") or acc.get("enc_app_password")
+        if not blob:
+            continue  # nothing encrypted yet, can't probe
+        try:
+            crypto.decrypt_str(blob, key)
+        except Exception:
+            return True
+    return False
+
+
 def _next_screen(request: Request) -> str | None:
     """If the current request should be redirected somewhere else, return
     that URL. Used by the catch-all proxy and the root path to enforce the
@@ -74,6 +105,9 @@ def _next_screen(request: Request) -> str | None:
     sess = sessions.session_from_request(request)
     if sess is None:
         return "/login"
+
+    if _session_is_stale(sess):
+        return "/logout"
 
     pending = auth.needs_setup(sess)
     if pending:
@@ -92,7 +126,7 @@ def login_get(request: Request):
         return _redirect(redirect)
     if sessions.session_from_request(request):
         return _redirect("/")
-    return _render("login.html", request)
+    return _render("login.html", request, **_login_ctx())
 
 
 @app.post("/login")
@@ -100,7 +134,7 @@ def login_post(request: Request, email: str = Form(...), password: str = Form(..
     try:
         token, _ = auth.login(email, password)
     except ValueError as e:
-        return _render("login.html", request, error=str(e), email=email)
+        return _render("login.html", request, **_login_ctx(error=str(e), email=email))
     response = _redirect("/")
     sessions.attach(response, token)
     return response

@@ -23,6 +23,7 @@ import streamlit as st  # noqa: E402
 
 from analytics import auth  # noqa: E402
 from analytics.accounts import AccountContext, account_context  # noqa: E402
+from analytics.demo import is_demo_slug  # noqa: E402
 from analytics.nav import get_latest_nav  # noqa: E402
 from analytics.portfolio import (  # noqa: E402
     SchemeRow, combined_xirr, filter_rows, latest_pdf_enc, parse_cas, to_scheme_rows,
@@ -308,6 +309,14 @@ def main() -> None:
     if slug is None:
         st.info("You don't have any CAS accounts yet.")
         return
+    if is_demo_slug(slug):
+        st.warning(
+            "🧪 **Demo account — none of the data shown below is real.** "
+            "Holdings, transactions, NAVs and XIRRs are all fictional, "
+            "served from a hand-crafted sample CAS so visitors can see how "
+            "the dashboard works. To track your own portfolio, ask the "
+            "admin for an invite."
+        )
     ctx = account_context(session, slug)
 
     rows, investor, period_to, enc_pdf, pdf_password_mismatch = _load_cas(slug, ctx)
@@ -320,6 +329,8 @@ def main() -> None:
 
     with st.sidebar:
         render_account_picker(session, on_account_change=_reset_caches)
+        if is_demo_slug(slug):
+            st.caption("🧪 _Demo account — sample data, not real._")
         st.divider()
 
         if has_cas:

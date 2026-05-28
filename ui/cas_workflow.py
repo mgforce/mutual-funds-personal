@@ -15,6 +15,7 @@ from typing import Callable
 import streamlit as st
 
 from analytics.accounts import AccountContext
+from analytics.demo import is_demo_slug
 from analytics.state import load_state, update_state
 
 
@@ -150,6 +151,51 @@ def _process_inbox_button(
         st.error(f"Fetch failed: {e}")
 
 
+# ---------------------------------------------------------------------------
+# Demo-account stand-ins — no Playwright, no IMAP, no real PDF parse.
+# Run the same UI beats (spinner → toast → progress bar → success) so the
+# demo "feels" like the real flow but never touches CAMS, Gmail, or the
+# bundled placeholder PDF (which casparser would crash on).
+# ---------------------------------------------------------------------------
+
+def _demo_refresh_cas_button(slug: str, reset_caches: Callable[[], None]) -> None:
+    with st.spinner("Submitting CAS request to CAMS… (demo · simulated)"):
+        time.sleep(3)
+
+    update_state(slug, last_request_at=datetime.now().isoformat())
+    st.toast("✅ Submitted to CAMS — waiting for email.", icon="📨")
+
+    total_seconds = 10
+    steps = 20
+    progress = st.progress(0.0, text="Waiting for CAMS email… (demo)")
+    for i in range(steps + 1):
+        frac = i / steps
+        elapsed = int(frac * total_seconds)
+        progress.progress(
+            frac, text=f"Waiting for CAMS email… {elapsed}s elapsed (demo)"
+        )
+        time.sleep(total_seconds / steps)
+    progress.empty()
+
+    with st.spinner("Parsing the new statement… (demo · simulated)"):
+        time.sleep(2)
+
+    update_state(slug, last_fetched_at=datetime.now().isoformat())
+    reset_caches()
+    # st.toast persists across the rerun; st.success would flash and disappear.
+    st.toast("Demo refresh complete — bundled sample data is unchanged.", icon="✅")
+    st.rerun()
+
+
+def _demo_process_inbox_button(slug: str, reset_caches: Callable[[], None]) -> None:
+    with st.spinner("Checking inbox… (demo · simulated)"):
+        time.sleep(2)
+    update_state(slug, last_fetched_at=datetime.now().isoformat())
+    reset_caches()
+    st.toast("Demo inbox check complete — no real email fetched.", icon="✅")
+    st.rerun()
+
+
 def render_cas_workflow(
     ctx: AccountContext,
     slug: str,
@@ -157,17 +203,30 @@ def render_cas_workflow(
     reset_caches: Callable[[], None],
 ) -> None:
     state = load_state(slug)
+    demo = is_demo_slug(slug)
 
     st.markdown("### CAS workflow")
     _render_status_summary(state)
 
-    st.caption("Request a fresh CAS from CAMS — they'll email the PDF in 5–30 min.")
+    st.caption(
+        "Request a fresh CAS from CAMS — they'll email the PDF in 5–30 min."
+        + ("  \n_Demo — simulated, no real request._" if demo else "")
+    )
     if st.button("🔄 Refresh CAS", use_container_width=True):
-        _refresh_cas_button(ctx, slug, reset_caches)
+        if demo:
+            _demo_refresh_cas_button(slug, reset_caches)
+        else:
+            _refresh_cas_button(ctx, slug, reset_caches)
 
-    st.caption("Download the latest CAMS email and refresh the dashboard.")
+    st.caption(
+        "Download the latest CAMS email and refresh the dashboard."
+        + ("  \n_Demo — simulated, no IMAP access._" if demo else "")
+    )
     if st.button("📥 Process inbox", use_container_width=True):
-        _process_inbox_button(ctx, slug, state, enc_pdf, reset_caches)
+        if demo:
+            _demo_process_inbox_button(slug, reset_caches)
+        else:
+            _process_inbox_button(ctx, slug, state, enc_pdf, reset_caches)
 
     st.caption("Re-fetch today's NAV from AMFI and recompute valuations (fast — skips PDF parser).")
     if st.button("📊 Re-parse current PDF with latest NAV", use_container_width=True):
@@ -181,8 +240,15 @@ def render_cas_workflow(
     # TODO: remove once classification/categorization rules are stable.
     st.caption("Force re-parse the current CAS (dev — after editing classification rules).")
     if st.button("🧹 Re-parse current PDF (dev)", use_container_width=True):
-        p = ctx.parse_cache_path
-        if p.exists():
-            p.unlink()
-        reset_caches()
-        st.rerun()
+        if demo:
+            # Deleting the cache would force casparser to attempt the
+            # placeholder PDF, which would crash the demo. No-op instead.
+            st.toast("Demo data is bundled — re-parse is a no-op.", icon="🧪")
+            reset_caches()
+            st.rerun()
+        else:
+            p = ctx.parse_cache_path
+            if p.exists():
+                p.unlink()
+            reset_caches()
+            st.rerun()
