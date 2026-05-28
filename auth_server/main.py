@@ -5,12 +5,10 @@ Routes:
   - GET  /login, POST /login         — sign in
   - POST /logout                     — sign out
   - GET  /bootstrap, POST /bootstrap — first-launch admin signup (only when
-                                        no admin exists yet)
+                                        no admin exists yet; 404 otherwise)
   - GET  /invite/{token}, POST /...  — invitee creates their account
   - GET  /setup, POST /setup         — collect Gmail App Password + PDF
                                         password after signup, kick off CAS
-  - GET  /migrate, POST /migrate     — one-shot migration from the legacy
-                                        config.yaml-based setup
   - GET  /static/*                   — auth-server's own CSS
   - everything else                  — proxied to Streamlit if authenticated,
                                         otherwise redirects to /login
@@ -29,7 +27,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from analytics import auth, crypto, db, migrate, session_payload
+from analytics import auth, crypto, db, session_payload
 from analytics.demo import DEMO_EMAIL, DEMO_PASSWORD
 from auth_server import account, proxy, sessions
 
@@ -107,9 +105,7 @@ def _session_is_stale(sess: auth.Session) -> bool:
 def _next_screen(request: Request) -> str | None:
     """If the current request should be redirected somewhere else, return
     that URL. Used by the catch-all proxy and the root path to enforce the
-    setup → migrate → bootstrap → login → setup → dashboard flow."""
-    if migrate.needs_migration():
-        return "/migrate"
+    bootstrap → login → setup → dashboard flow."""
     if not auth.any_admin_exists():
         return "/bootstrap"
 
@@ -189,8 +185,6 @@ def bootstrap_get(request: Request):
     # this app is in the pre- or post-setup state.
     if auth.any_admin_exists():
         raise HTTPException(status_code=404)
-    if migrate.needs_migration():
-        return _redirect("/migrate")
     return _render("bootstrap.html", request, admin_email=auth.admin_email() or "")
 
 
@@ -293,34 +287,6 @@ def setup_post(
         from_date=from_date,
     )
     return _redirect("/")
-
-
-@app.get("/migrate", response_class=HTMLResponse)
-def migrate_get(request: Request):
-    # Symmetric with /bootstrap: hide once it's a no-op so the post-setup
-    # state isn't enumerable.
-    if not migrate.needs_migration():
-        raise HTTPException(status_code=404)
-    return _render("migrate.html", request, admin_email=auth.admin_email() or "")
-
-
-@app.post("/migrate")
-def migrate_post(
-    request: Request,
-    password: str = Form(...),
-    confirm: str = Form(...),
-):
-    if not migrate.needs_migration():
-        raise HTTPException(status_code=404)
-    if password != confirm:
-        return _render("migrate.html", request, error="Passwords don't match.",
-                       admin_email=auth.admin_email() or "")
-    try:
-        summary = migrate.run_migration(password)
-    except RuntimeError as e:
-        return _render("migrate.html", request, error=str(e),
-                       admin_email=auth.admin_email() or "")
-    return _render("migrate_done.html", request, summary=summary)
 
 
 # ---------------------------------------------------------------------------
