@@ -483,6 +483,9 @@ def _wipe_account_data(slug: str) -> None:
 def delete_my_account(session: Session, password: str) -> None:
     """Confirm password, then wipe this user's data and the CAS account
     they own. Sessions for this user are invalidated."""
+    from analytics.demo import DEMO_EMAIL
+    if session.user_email == DEMO_EMAIL:
+        raise ValueError("The demo account cannot be deleted.")
     user = get_user(session.user_email)
     if not user or not crypto.verify_password(user["password_hash"], password):
         raise ValueError("Incorrect password.")

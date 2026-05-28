@@ -175,7 +175,12 @@ def _render_settings_expander(session: auth.Session, slug: str, *, is_owner: boo
                    + (" (admin)" if session.is_admin else ""))
 
         if session.user_email == DEMO_EMAIL:
-            st.caption("🔒 _Password change is disabled for the demo account._")
+            st.markdown(
+                "<span style='opacity:0.5;cursor:not-allowed;' "
+                "title='Disabled on the demo account'>"
+                "🔒 Change login password</span>",
+                unsafe_allow_html=True,
+            )
         else:
             st.markdown(
                 "<a href='/account/password' target='_self'>🔒 Change login password</a>",
@@ -184,9 +189,19 @@ def _render_settings_expander(session: auth.Session, slug: str, *, is_owner: boo
         st.divider()
 
         if is_demo_slug(slug):
-            st.caption(
-                "🧪 _Gmail and CAS PDF credentials on the demo account are "
-                "fixed and cannot be updated._"
+            st.button(
+                "✉️ Set new Gmail App Password",
+                key=f"_btn_gmail_pw_{slug}_disabled",
+                disabled=True,
+                use_container_width=True,
+                help="Disabled on the demo account.",
+            )
+            st.button(
+                "🔑 Set new CAS PDF password",
+                key=f"_btn_pdf_pw_{slug}_disabled",
+                disabled=True,
+                use_container_width=True,
+                help="Disabled on the demo account.",
             )
         elif is_owner:
             _render_inline_password_setter(
@@ -217,11 +232,20 @@ def _render_settings_expander(session: auth.Session, slug: str, *, is_owner: boo
         st.divider()
         st.link_button("🚪 Log out", "/logout", type="primary", use_container_width=True)
 
-        st.markdown(
-            "<a href='/account/delete' target='_self' "
-            "style='color:#f87171;font-size:0.9em;'>🗑️ Delete my account</a>",
-            unsafe_allow_html=True,
-        )
+        if session.user_email == DEMO_EMAIL:
+            st.markdown(
+                "<span style='color:#f87171;font-size:0.9em;"
+                "opacity:0.5;cursor:not-allowed;' "
+                "title='Disabled on the demo account'>"
+                "🗑️ Delete my account</span>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                "<a href='/account/delete' target='_self' "
+                "style='color:#f87171;font-size:0.9em;'>🗑️ Delete my account</a>",
+                unsafe_allow_html=True,
+            )
 
 
 def _render_inline_password_setter(
