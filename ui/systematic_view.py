@@ -11,6 +11,7 @@ from analytics.systematic import (
     ACTIVE_WINDOW_DAYS, IN_LEG_TYPES, OUT_LEG_TYPES, _is_transfer_leg,
     detect_sips, detect_stps,
 )
+from ui.donut import render_donut
 from ui.format import fmt_inr
 
 
@@ -28,6 +29,34 @@ def _render_summary(n_sips: int, n_stps: int,
         "from the median gap between recent installments — a paused mandate may "
         "show as active until its next slot is missed."
     )
+
+
+def _render_inflow_chart(sips: list, stps: list, rows: list[SchemeRow]) -> None:
+    """Donut of combined SIP + STP monthly inflow grouped by the destination
+    scheme's sub-category (Large & Mid Cap, Mid Cap, Flexi Cap, …). For an STP
+    the inflow is counted against its *target* scheme — that's where the money
+    lands — while a SIP lands in its own scheme."""
+    sub_by_isin = {r.isin: r.sub_type for r in rows}
+
+    def bucket(isin: str) -> str:
+        return sub_by_isin.get(isin) or "Other"
+
+    inflows: list[dict] = []
+    for s in sips:
+        inflows.append({"Bucket": bucket(s.isin), "Current": s.monthly_amount})
+    for s in stps:
+        inflows.append({"Bucket": bucket(s.target_isin), "Current": s.monthly_amount})
+
+    df = (
+        pd.DataFrame(inflows, columns=["Bucket", "Current"])
+        .groupby("Bucket", as_index=False)["Current"].sum()
+    )
+    st.subheader("Monthly inflow by class")
+    st.caption(
+        "Combined SIP + STP monthly equivalent, grouped by the destination "
+        "fund's category. STP inflow counts against the target scheme."
+    )
+    render_donut(df, "Monthly inflow by class", show_value=True)
 
 
 def _render_sip_table(sips: list) -> None:
@@ -140,6 +169,8 @@ def render_systematic(rows: list[SchemeRow]) -> None:
         monthly_sip=sum(s.monthly_amount for s in sips),
         monthly_stp=sum(s.monthly_amount for s in stps),
     )
+    st.divider()
+    _render_inflow_chart(sips, stps, rows)
     st.divider()
     _render_sip_table(sips)
     st.divider()

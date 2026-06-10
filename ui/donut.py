@@ -21,7 +21,7 @@ def breakdown_data(rows: list[SchemeRow], type_filter: str) -> tuple[pd.DataFram
     return df, title
 
 
-def render_donut(df: pd.DataFrame, title: str) -> None:
+def render_donut(df: pd.DataFrame, title: str, show_value: bool = False) -> None:
     df = df[df["Current"] > 0].copy()
     if df.empty:
         st.info("Nothing to chart for this filter.")
@@ -33,6 +33,11 @@ def render_donut(df: pd.DataFrame, title: str) -> None:
 
     custom_data = list(zip(df["Current"].apply(fmt_inr), df["Pct"].round(2)))
 
+    # The inflow chart wants the rupee figure on the slice itself (amount, then
+    # share); the portfolio chart keeps the leaner label-and-percent.
+    text_tmpl = ("<b>%{label}</b><br>%{customdata[0]}<br>%{percent}"
+                 if show_value else "<b>%{label}</b><br>%{percent}")
+
     fig = go.Figure(
         data=[
             go.Pie(
@@ -43,7 +48,7 @@ def render_donut(df: pd.DataFrame, title: str) -> None:
                 direction="clockwise",
                 rotation=90,
                 textposition="outside",
-                texttemplate="<b>%{label}</b><br>%{percent}",
+                texttemplate=text_tmpl,
                 textfont=dict(size=13),
                 hovertemplate="<b>%{label}</b><br>%{customdata[0]} (%{percent})<extra></extra>",
                 customdata=custom_data,
