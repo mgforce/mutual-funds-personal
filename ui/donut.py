@@ -21,7 +21,10 @@ def breakdown_data(rows: list[SchemeRow], type_filter: str) -> tuple[pd.DataFram
     return df, title
 
 
-def render_donut(df: pd.DataFrame, title: str, show_value: bool = False) -> None:
+def render_donut(df: pd.DataFrame, title: str, show_value: bool = False,
+                 key: str | None = None) -> None:
+    """Render an asset/inflow donut. ``key`` keeps multiple donuts on one page
+    distinct (e.g. the planner's category donut and its per-fund drill-down)."""
     df = df[df["Current"] > 0].copy()
     if df.empty:
         st.info("Nothing to chart for this filter.")
@@ -66,4 +69,4 @@ def render_donut(df: pd.DataFrame, title: str, show_value: bool = False) -> None
         uniformtext=dict(minsize=10, mode="hide"),
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=key)

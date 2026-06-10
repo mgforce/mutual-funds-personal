@@ -33,6 +33,7 @@ from ui.auth_glue import active_slug, consume_flash, session_from_header  # noqa
 from ui.cas_workflow import render_cas_workflow  # noqa: E402
 from ui.donut import breakdown_data, render_donut  # noqa: E402
 from ui.format import TYPE_DISPLAY, fmt_inr, fmt_pct  # noqa: E402
+from ui.inflow_planner import render_inflow_planner  # noqa: E402
 from ui.query import clear_query_keep_account  # noqa: E402
 from ui.scheme_card import (  # noqa: E402
     CARD_CSS, SORT_DEFAULT_ASC, SORT_KEYS, render_scheme_card, render_sort_header,
@@ -366,7 +367,9 @@ def main() -> None:
             render_scheme_detail(selected_row, rows)
             return
 
-    tab_portfolio, tab_systematic = st.tabs(["📊 Portfolio", "🔁 SIPs & STPs"])
+    tab_portfolio, tab_systematic, tab_planner = st.tabs(
+        ["📊 Portfolio", "🔁 SIPs & STPs", "🧮 Inflow planner"]
+    )
 
     with tab_portfolio:
         type_filtered, visible, _type_filter = _render_filters(rows)
@@ -384,6 +387,9 @@ def main() -> None:
 
     with tab_systematic:
         render_systematic(rows)
+
+    with tab_planner:
+        render_inflow_planner(rows, slug, is_demo_slug(slug))
 
 
 if __name__ == "__main__":
