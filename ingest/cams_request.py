@@ -204,56 +204,59 @@ def submit_cas_request(page: Page, ctx: AccountContext, *, dry_run: bool) -> Non
     print(f"-> submit confirmed via {'API body' if has_body_success else 'page text'}")
 
 
+import threading
+
 def submit_via_playwright(ctx: AccountContext, *, dry_run: bool = False, headless: bool | None = None) -> dict:
-    """Run the full CAMS form submission and return a status dict.
+    """Run the full CAMS form submission in a background thread
+    to avoid asyncio conflicts with Streamlit on Windows."""
+    result = {}
 
-    Parameters
-    ----------
-    ctx : AccountContext
-        Which CAS account to submit for (provides email + PDF password).
-    dry_run : bool
-        Fill the form but don't click Submit. Default False.
-    headless : bool | None
-        Override the playwright.headless setting from config.yaml.
-    """
-    pw_cfg = app_config().get("playwright") or {}
-    is_headless = pw_cfg.get("headless", True) if headless is None else headless
-
-    with sync_playwright() as p:
-        # Use the real installed Chrome (channel="chrome") rather than the
-        # bundled Chromium build, and strip the most obvious automation tells.
-        # reCAPTCHA on the CAMS form scores Playwright Chromium as a bot even
-        # in headed mode because `navigator.webdriver === true` and the
-        # `--enable-automation` flag are visible; the args + init script below
-        # patch those out so the captcha is more likely to mint a token silently.
-        # Falls back to bundled Chromium if Chrome isn't installed locally.
-        launch_args = dict(
-            headless=is_headless,
-            slow_mo=pw_cfg.get("slow_mo_ms", 0) if not is_headless else 0,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--no-default-browser-check",
-                "--no-first-run",
-            ],
-        )
+    def _run():
+        import asyncio
+        loop = asyncio.ProactorEventLoop()
+        asyncio.set_event_loop(loop)
         try:
-            browser = p.chromium.launch(channel="chrome", **launch_args)
-        except Exception:
-            browser = p.chromium.launch(**launch_args)
-
-        context = browser.new_context(
-            viewport={"width": 1440, "height": 900},
-            locale="en-IN",
-        )
-        # Hide `navigator.webdriver` (reCAPTCHA's single most popular check).
-        context.add_init_script(
-            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
-        )
-        page = context.new_page()
-        try:
-            submit_cas_request(page, ctx, dry_run=dry_run)
-            return {"ok": True, "submitted": not dry_run}
+            pw_cfg = app_config().get("playwright") or {}
+            is_headless = pw_cfg.get("headless", True) if headless is None else headless
+            with sync_playwright() as p:
+                launch_args = dict(
+                    headless=is_headless,
+                    slow_mo=pw_cfg.get("slow_mo_ms", 0) if not is_headless else 0,
+                    args=[
+                        "--disable-blink-features=AutomationControlled",
+                        "--no-default-browser-check",
+                        "--no-first-run",
+                    ],
+                )
+                try:
+                    browser = p.chromium.launch(channel="chrome", **launch_args)
+                except Exception:
+                    browser = p.chromium.launch(**launch_args)
+                context = browser.new_context(
+                    viewport={"width": 1440, "height": 900},
+                    locale="en-IN",
+                )
+                context.add_init_script(
+                    "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
+                )
+                page = context.new_page()
+                try:
+                    submit_cas_request(page, ctx, dry_run=dry_run)
+                    result["value"] = {"ok": True, "submitted": not dry_run}
+                except Exception as e:
+                    result["value"] = {"ok": False, "error": str(e)}
+                finally:
+                    browser.close()
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            result["value"] = {"ok": False, "error": f"Thread crash: {e}"}
         finally:
-            browser.close()
+            loop.close()
+
+    t = threading.Thread(target=_run)
+    t.start()
+    t.join()
+    print(f"DEBUG thread result: {result}")
+    out = result.get("value")
+    if out is None:
+        return {"ok": False, "error": "Playwright thread returned no result"}
+    return out
