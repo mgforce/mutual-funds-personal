@@ -32,9 +32,9 @@ Requires Python 3.9+, a Gmail account, and a Gmail [App Password](https://myacco
 ```bash
 git clone https://github.com/<you>/mutual-funds-personal.git
 cd mutual-funds-personal
-python3 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv .venv/bin/activate
 pip install -r requirements.txt
-playwright install chromium       # ~150 MB; needed for the CAS request flow
+playwright install chromium       # needed for the CAS request flow
 cp config.example.yaml config.yaml
 # edit config.yaml — set admin_email to your Gmail
 ```
@@ -44,6 +44,10 @@ cp config.example.yaml config.yaml
 You need **both** processes running side-by-side — the auth gateway can't render the dashboard without the Streamlit backend, and Streamlit can't authenticate users without the gateway.
 
 ```bash
+Open 2 CMD terminals. And in both of them do following
+cd mutual-funds-personal
+.venv\Scripts\activate
+
 # terminal 1: Streamlit dashboard backend (port 8501)
 streamlit run ui/app.py
 
