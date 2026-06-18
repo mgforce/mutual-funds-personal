@@ -60,7 +60,7 @@ def _refresh_cas_button(ctx: AccountContext, slug: str, reset_caches: Callable[[
     with st.spinner("Submitting CAS request to CAMS… (~30s)"):
         result = submit_via_playwright(ctx, dry_run=False)
 
-    if not (result.get("ok") and result.get("submitted")):
+    if not result or not (result.get("ok") and result.get("submitted")):
         st.error(f"Submission failed: {result.get('error', 'unknown')}")
         return
 
