@@ -4,7 +4,7 @@
 
 # The single user who is allowed to invite others. After first launch this
 # email is the only one that can self-register as admin.
-admin_email: gagan.parakh@gmail.com
+admin_email: your.email@gmail.com
 
 cams:
   cams_sender: donotreply@camsonline.com
